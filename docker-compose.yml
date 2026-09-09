@@ -1,0 +1,18 @@
+services:
+  funasr-ws:
+    image: ghcr.io/johnson-0304/funasr-ws:latest
+    container_name: funasr-ws
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:10097:10095"
+    environment:
+      # Number of CPU threads for the ASR model. On hybrid Intel CPUs 4 is faster than 8.
+      - NUM_THREADS=4
+      # Silero VAD speech threshold used when the client does not send speech_noise_thres.
+      - VAD_THRESHOLD=0.5
+      # Force a language ("zh", "en", "ja") or leave empty for automatic detection.
+      - ASR_LANGUAGE=
+    deploy:
+      resources:
+        limits:
+          memory: 4G

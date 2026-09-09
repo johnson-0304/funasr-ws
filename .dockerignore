@@ -1,0 +1,12 @@
+.git
+.github
+.venv
+venv
+models
+tests
+__pycache__
+*.pyc
+*.tar.bz2
+*.wav
+README.md
+docker-compose.yml

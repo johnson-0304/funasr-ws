@@ -1,0 +1,17 @@
+[project]
+name = "funasr-ws"
+version = "0.1.0"
+description = "Fun-ASR-Nano speech recognition service on CPU: FunASR-compatible WebSocket 2pass protocol and OpenAI-compatible HTTP API"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+timeout = 60
+asyncio_mode = "auto"
