@@ -22,6 +22,12 @@ if [ ! -f "${TARGET}/silero_vad.onnx" ]; then
   curl -fsSL --retry 5 --retry-delay 3 -o "${TARGET}/silero_vad.onnx" "${GITHUB_BASE}/silero_vad.onnx"
 fi
 
+if [ ! -f "${TARGET}/gtcrn_simple.onnx" ]; then
+  echo "downloading gtcrn_simple.onnx (speech denoiser)"
+  curl -fsSL --retry 5 --retry-delay 3 -o "${TARGET}/gtcrn_simple.onnx" \
+    "https://github.com/k2-fsa/sherpa-onnx/releases/download/speech-enhancement-models/gtcrn_simple.onnx"
+fi
+
 if [ ! -f "${TARGET}/${ASR_NAME}/llm.int8.onnx" ]; then
   echo "downloading ${ASR_NAME} from ${ASR_URL}"
   TMP="$(mktemp -d)"
@@ -33,4 +39,4 @@ if [ ! -f "${TARGET}/${ASR_NAME}/llm.int8.onnx" ]; then
 fi
 
 echo "models ready in ${TARGET}:"
-du -sh "${TARGET}/${ASR_NAME}" "${TARGET}/silero_vad.onnx"
+du -sh "${TARGET}/${ASR_NAME}" "${TARGET}/silero_vad.onnx" "${TARGET}/gtcrn_simple.onnx"

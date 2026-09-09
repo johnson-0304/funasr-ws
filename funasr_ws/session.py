@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
@@ -36,6 +38,7 @@ class SessionOptions:
     pre_roll_samples: int = 0
     post_roll_samples: int = 0
     history_samples: int = 30 * SAMPLE_RATE  # must cover max_speech_duration + padding
+    dump_dir: Path | None = None  # debug: write every finalized sentence as wav + txt
 
 
 class StreamSession:
@@ -138,4 +141,16 @@ class StreamSession:
                 self._tracker.reset()
                 text = await asyncio.to_thread(self._transcribe, audio)
                 log.info("sentence %.2fs -> %r", len(audio) / SAMPLE_RATE, text)
+                if self._opt.dump_dir:
+                    dump_sentence(self._opt.dump_dir, audio, text)
                 await self._send(offline_frame(self._opt.wav_name, text, is_final))
+
+
+def dump_sentence(directory: Path, audio: np.ndarray, text: str) -> None:
+    """Debug aid: keep the exact audio a sentence was decoded from, next to its transcript."""
+    import soundfile as sf
+
+    directory.mkdir(parents=True, exist_ok=True)
+    stem = directory / f"{time.strftime('%Y%m%d-%H%M%S')}-{int(time.time() * 1000) % 1000:03d}"
+    sf.write(f"{stem}.wav", audio, SAMPLE_RATE, subtype="PCM_16")
+    Path(f"{stem}.txt").write_text(text + "\n", encoding="utf-8")

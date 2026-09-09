@@ -33,6 +33,7 @@ class Settings:
     num_threads: int
     language: str  # "" = automatic, otherwise a Nano prompt name such as "中文"
     itn: bool
+    denoise: bool  # GTCRN speech enhancement before every decode (raises SNR of quiet, noisy mics)
     vad_threshold: float
     vad_min_silence_s: float
     vad_min_speech_s: float
@@ -45,6 +46,7 @@ class Settings:
     host: str
     port: int
     log_level: str
+    dump_dir: Path | None  # debug only: save every finalized sentence as wav + txt
 
     @property
     def asr_dir(self) -> Path:
@@ -53,6 +55,10 @@ class Settings:
     @property
     def vad_model(self) -> Path:
         return self.model_dir / "silero_vad.onnx"
+
+    @property
+    def denoise_model(self) -> Path:
+        return self.model_dir / "gtcrn_simple.onnx"
 
 
 def load_settings() -> Settings:
@@ -64,6 +70,7 @@ def load_settings() -> Settings:
         num_threads=_env_int("NUM_THREADS", 4),
         language=parse_language(os.environ.get("ASR_LANGUAGE", "")),
         itn=_env_bool("ASR_ITN", True),
+        denoise=_env_bool("DENOISE", True),
         vad_threshold=_env_float("VAD_THRESHOLD", 0.5),
         vad_min_silence_s=_env_float("VAD_MIN_SILENCE_S", 0.4),
         vad_min_speech_s=_env_float("VAD_MIN_SPEECH_S", 0.2),
@@ -76,4 +83,5 @@ def load_settings() -> Settings:
         host=os.environ.get("HOST", "127.0.0.1"),
         port=_env_int("PORT", 10095),
         log_level=os.environ.get("LOG_LEVEL", "info"),
+        dump_dir=Path(os.environ["DUMP_DIR"]) if os.environ.get("DUMP_DIR") else None,
     )

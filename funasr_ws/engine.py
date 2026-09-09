@@ -40,7 +40,6 @@ class Engine:
     """Loads the models once; `transcribe` is serialized because one recognizer is shared."""
 
     def __init__(self, settings: Settings) -> None:
-        import sherpa_onnx
 
         self.settings = settings
         asr = settings.asr_dir
@@ -49,42 +48,84 @@ class Engine:
                 raise FileNotFoundError(f"ASR model file missing: {asr / name}")
         if not settings.vad_model.is_file():
             raise FileNotFoundError(f"VAD model file missing: {settings.vad_model}")
+        self._lock = threading.Lock()
+        self._recognizers: dict[str, object] = {}
+        self._denoiser = self._make_denoiser() if settings.denoise else None
+        self._recognizer(settings.language)
+        probe = self._recognizer(settings.language).create_stream()
+        self.supports_stream_hotwords = probe.has_option("hotwords")
+        log.info(
+            "engine ready (threads=%d, default language=%r, denoise=%s, hotwords=%s)",
+            settings.num_threads,
+            settings.language or "auto",
+            settings.denoise,
+            self.supports_stream_hotwords,
+        )
+
+    def _make_denoiser(self):
+        import sherpa_onnx
+
+        model = self.settings.denoise_model
+        if not model.is_file():
+            raise FileNotFoundError(f"denoiser model file missing: {model}")
+        config = sherpa_onnx.OfflineSpeechDenoiserConfig(
+            model=sherpa_onnx.OfflineSpeechDenoiserModelConfig(
+                gtcrn=sherpa_onnx.OfflineSpeechDenoiserGtcrnModelConfig(model=str(model)),
+                num_threads=1,
+            )
+        )
+        denoiser = sherpa_onnx.OfflineSpeechDenoiser(config)
+        if denoiser.sample_rate != SAMPLE_RATE:
+            raise RuntimeError(f"denoiser sample rate {denoiser.sample_rate} != {SAMPLE_RATE}")
+        log.info("speech denoiser enabled (%s)", model.name)
+        return denoiser
+
+    def _recognizer(self, language: str):
+        """One recognizer per language prompt, created on first use (~1 GB RAM each)."""
+        import sherpa_onnx
+
+        recognizer = self._recognizers.get(language)
+        if recognizer is not None:
+            return recognizer
+        asr = self.settings.asr_dir
         started = time.perf_counter()
-        self._recognizer = sherpa_onnx.OfflineRecognizer.from_funasr_nano(
+        recognizer = sherpa_onnx.OfflineRecognizer.from_funasr_nano(
             encoder_adaptor=str(asr / "encoder_adaptor.int8.onnx"),
             llm=str(asr / "llm.int8.onnx"),
             embedding=str(asr / "embedding.int8.onnx"),
             tokenizer=str(asr / "Qwen3-0.6B"),
-            num_threads=settings.num_threads,
-            language=settings.language,
-            itn=settings.itn,
+            num_threads=self.settings.num_threads,
+            language=language,
+            itn=self.settings.itn,
         )
-        self._lock = threading.Lock()
-        probe = self._recognizer.create_stream()
-        self.supports_stream_language = probe.has_option("language")
-        self.supports_stream_hotwords = probe.has_option("hotwords")
+        self._recognizers[language] = recognizer
         log.info(
-            "loaded %s in %.1fs (threads=%d, language=%r, per-stream language=%s, hotwords=%s)",
-            settings.asr_model_name,
+            "loaded %s for language %r in %.1fs",
+            self.settings.asr_model_name,
+            language or "auto",
             time.perf_counter() - started,
-            settings.num_threads,
-            settings.language or "auto",
-            self.supports_stream_language,
-            self.supports_stream_hotwords,
         )
+        return recognizer
 
     def transcribe(self, samples: np.ndarray, language: str = "", hotwords: str = "") -> str:
-        """Decode one utterance of float32 16 kHz mono samples. Blocks; safe from any thread."""
+        """Decode one utterance of float32 16 kHz mono samples. Blocks; safe from any thread.
+
+        `language` is a Nano prompt name ("中文", "英文", "日文") or "" for the default.
+        """
         if samples.size == 0:
             return ""
         with self._lock:
-            stream = self._recognizer.create_stream()
-            if language and self.supports_stream_language:
-                stream.set_option("language", language)
+            if self._denoiser is not None:
+                samples = np.ascontiguousarray(
+                    self._denoiser.run(np.ascontiguousarray(samples), SAMPLE_RATE).samples,
+                    dtype=np.float32,
+                )
+            recognizer = self._recognizer(language or self.settings.language)
+            stream = recognizer.create_stream()
             if hotwords and self.supports_stream_hotwords:
                 stream.set_option("hotwords", hotwords)
             stream.accept_waveform(SAMPLE_RATE, samples)
-            self._recognizer.decode_stream(stream)
+            recognizer.decode_stream(stream)
             return stream.result.text.strip()
 
     def make_vad(self, threshold: float | None = None):

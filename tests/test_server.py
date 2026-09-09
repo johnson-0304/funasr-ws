@@ -16,7 +16,6 @@ from tests.test_session import ScriptedVad
 
 
 class FakeEngine:
-    supports_stream_language = True
     supports_stream_hotwords = False
 
     def __init__(self, settings: Settings) -> None:
@@ -42,6 +41,7 @@ def settings(tmp_path: Path) -> Settings:
         num_threads=1,
         language="",
         itn=True,
+        denoise=False,
         vad_threshold=0.5,
         vad_min_silence_s=0.4,
         vad_min_speech_s=0.2,
@@ -54,6 +54,7 @@ def settings(tmp_path: Path) -> Settings:
         host="127.0.0.1",
         port=0,
         log_level="info",
+        dump_dir=None,
     )
 
 

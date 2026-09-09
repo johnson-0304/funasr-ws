@@ -47,6 +47,7 @@ def create_app(settings: Settings | None = None, engine_factory=Engine) -> FastA
             "status": "ok",
             "model": settings.asr_model_name,
             "language": settings.language or "auto",
+            "denoise": settings.denoise,
             "num_threads": settings.num_threads,
         }
 
@@ -117,13 +118,6 @@ def create_app(settings: Settings | None = None, engine_factory=Engine) -> FastA
             await ws.send_json(error_frame(str(err)))
             await ws.close(code=WS_POLICY_VIOLATION)
             return
-        if start.language and not engine.supports_stream_language:
-            log.warning(
-                "%s: per-stream language %r unsupported by this model build; using %r",
-                start.wav_name,
-                start.language,
-                settings.language or "auto",
-            )
         if start.hotwords and not engine.supports_stream_hotwords:
             log.warning(
                 "%s: hotwords unsupported by this model build; ignoring %s",
@@ -146,6 +140,7 @@ def create_app(settings: Settings | None = None, engine_factory=Engine) -> FastA
                 pre_roll_samples=settings.pre_roll_ms * SAMPLE_RATE // 1000,
                 post_roll_samples=settings.post_roll_ms * SAMPLE_RATE // 1000,
                 history_samples=int((settings.vad_max_speech_s + 5) * SAMPLE_RATE),
+                dump_dir=settings.dump_dir,
             ),
         )
         log.info(
