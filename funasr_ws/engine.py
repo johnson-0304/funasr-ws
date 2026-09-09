@@ -40,7 +40,6 @@ class Engine:
     """Loads the models once; `transcribe` is serialized because one recognizer is shared."""
 
     def __init__(self, settings: Settings) -> None:
-
         self.settings = settings
         asr = settings.asr_dir
         for name in ("encoder_adaptor.int8.onnx", "llm.int8.onnx", "embedding.int8.onnx"):
